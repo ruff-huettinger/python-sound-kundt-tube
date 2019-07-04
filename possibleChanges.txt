@@ -1,0 +1,253 @@
+// possible Changes for Arduino Script -> this is NOT a complete Program, only some parts to be included/changed with the current Program
+// 90% tested - JF 04.07.2019
+
+
+bool debugPrints;
+bool useDisplays;
+
+// Spin-Controller Setup Structure to store Data
+struct SpinController
+{
+  int pinA;
+  int pinB;
+  int pos;
+  int prePos;
+  int preValue;
+  int min;
+  int max;
+};
+
+// Create two Spin-Controller for Volume and Frequency
+SpinController CtrlVolume;
+SpinController CtrlFrequency;
+
+
+void setup() {
+  debugPrints = true;
+  useDisplays = false;
+  attachInterrupt(digitalPinToInterrupt(CtrlVolume.pinA), MgmtVolume, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(CtrlFrequency.pinA), MgmtFrequency, CHANGE);
+}
+
+void loop() {
+
+  // Read incomming Serial Data
+  if (Serial.available() > 0) {
+    char *newData = serialReadLine();
+    setConfig(newData);
+  }
+
+  // Send updated Data to Serial
+  if ((CtrlVolume.pos != CtrlVolume.prePos) || (CtrlFrequency.pos != CtrlFrequency.prePos))
+  {
+    if (debugPrints) {
+      Serial.print("Volume=");Serial.print(CtrlVolume.pos);
+      Serial.print(" Frequency=");Serial.println(CtrlFrequency.pos);
+    }
+    CtrlVolume.prePos = CtrlVolume.pos;
+    CtrlFrequency.prePos = CtrlFrequency.pos;
+  }
+}
+
+// ----------------------------------------------------------------
+// Split Config and Value from Command and apply Configuration
+// ----------------------------------------------------------------
+void setConfig(char *Command)
+{
+  // Initialize Variables
+  int pos = 0;
+  int splitpos = 0;
+  bool readValue = false;
+  // Create Config and Value Char-Array
+  char config[100] = { '\0' };
+  char value[100] = { '\0' };
+  // Loop through the Command and Split Config from Value
+  while (Command[pos] != '\0')
+  {
+    // Switch from reading the Config to reading the Value
+    if (Command[pos] == '=')
+    {
+      // Remember the Separator Position
+      splitpos = pos + 1;
+      readValue = true;
+    }
+    if (readValue == false)
+    {
+      // Add Character to Config
+      config[pos] = Command[pos];
+    } else {
+      // Add Character to Value
+      value[pos - splitpos] = Command[pos];
+    }
+    pos++;
+  }
+  // Set the Configuration from Config and Value
+  // ----------------------------------------------------------------
+  if (strcmp(config, "freq_max") == 0)  {
+    CtrlFrequency.max  = atoi(value);
+  }
+  if (strcmp(config, "freq_min") == 0)  {
+    CtrlFrequency.min  = atoi(value);
+  }
+  if (strcmp(config, "freq_set") == 0)  {
+    CtrlFrequency.pos  = atoi(value);
+  }
+  if (strcmp(config, "vol_max") == 0)   {
+    CtrlVolume.max = atoi(value);
+  }
+  if (strcmp(config, "vol_min") == 0)   {
+    CtrlVolume.min = atoi(value);
+  }
+  if (strcmp(config, "vol_set") == 0)   {
+    CtrlVolume.pos = atoi(value);
+  }
+  if (strcmp(config, "display") == 0) {
+    if (strcmp(value, "on") == 0) {
+      display_num = CtrlFrequency.pos;
+    } else {
+      display_num = 10000;
+    }
+  }
+}
+
+// ----------------------------------------------------------------
+// ReadLine from Serial -  this will stuck forever if no line break recieved
+// ----------------------------------------------------------------
+char *serialReadLine() {
+  char *result = new char[250];
+  int pos = 0;
+  int newByte;
+  bool listen = true;
+  // Read until stop listen
+  while (listen == true)
+  {
+    // Check for a Serial Input
+    if (Serial.available() > 0) {
+      newByte = Serial.read();
+      // Check if the End is reached ( \r or \n )
+      if ((newByte == 13) || (newByte == 10)) {
+        // Set the End of the Character Array
+        result[pos] = '\0';
+        listen = false;
+      } else {
+        // Add Character to Array
+        result[pos] = (char)newByte;
+        pos++;
+      }
+    }
+  }
+  return result;
+}
+
+// ----------------------------------------------------------------
+// Service Function for Input Interrupts - Volume Controller
+// ----------------------------------------------------------------
+void MgmtVolume()
+{
+  // Read current Controller values and check if it's a left/right spin
+  int newValue = digitalRead(CtrlVolume.pinA);
+  if ((newValue == 1) && (CtrlVolume.preValue == 0)) {
+    if (digitalRead(CtrlVolume.pinB) == 1) {
+      // Controller right Spin
+      if (CtrlVolume.pos < CtrlVolume.max) { CtrlVolume.pos++; }
+    } else {
+      // Controller left Spin
+      if (CtrlVolume.pos > CtrlVolume.min) { CtrlVolume.pos--; }
+    }
+  }
+  CtrlVolume.preValue = newValue;
+  display_num = CtrlVolume.pos;
+  // Print current Value
+  if (debugPrints) {
+    Serial.print("Set Volume: ");
+    Serial.println(CtrlVolume.pos);
+  }
+}
+
+// ----------------------------------------------------------------
+// Service Function for Input Interrupts - Frequency Controller
+// ----------------------------------------------------------------
+void MgmtFrequency()
+{
+  // Read current Controller values and check if it's a left/right spin
+  int newValue = digitalRead(CtrlFrequency.pinA);
+  if ((newValue == 1) && (CtrlFrequency.preValue == 0)) {
+    if (digitalRead(CtrlFrequency.pinB) == 1) {
+      // Controller right Spin
+      if (CtrlFrequency.pos < CtrlFrequency.max) { CtrlFrequency.pos++; }
+    } else {
+      // Controller left Spin
+      if (CtrlFrequency.pos > CtrlFrequency.min) { CtrlFrequency.pos--; }
+    }
+  }
+  CtrlFrequency.preValue = newValue;
+  display_num = CtrlFrequency.pos;
+  // Print current Value
+  if (debugPrints) {
+    Serial.print("Set Frequency: ");
+    Serial.println(CtrlFrequency.pos);
+  }
+}
+
+//----------------------------------------------------------------------
+// 7-Seg screen, Write a number
+//----------------------------------------------------------------------
+void NumberToScreen(uint16_t num, uint8_t scr) { //scr can be 0,1,2
+  int basePos = 4;
+  uint16_t useValue = num;
+  if (debugPrints) { Serial.print("Update Display: "); }
+  // loop through every decimal place ... 1, 10, 100, 1000
+  for (int bPos = basePos; bPos > 0; bPos--)
+  {
+    int posValue = useValue / pow(10, bPos - 1);
+    if (debugPrints) { Serial.print(posValue); }
+    if (bPos > 1) { Serial.print(", "); }
+    if (useDisplays) {
+      // disable one specific Display-Array
+      digitalWrite(displayPins[scr][0], LOW);
+      // write a integer to a Display-Array
+      digitWrite(posValue);
+      // enable one specific Display-Array
+      digitalWrite(displayPins[scr][0], HIGH);
+    }
+    useValue = useValue - (pow(10, bPos - 1) * posValue);
+  }
+  if (debugPrints) { Serial.println(); }
+}
+
+//----------------------------------------------------------------------
+// 7-Seg display, Write a digit
+//----------------------------------------------------------------------
+void digitWrite(uint8_t digit)
+{
+  //write the number for sevenSegment from 2D array
+  bool *number = int2bit4rev(digit);
+  // loop through every display PIN
+  for (int pin = 0; pin < 4; pin++)
+  {
+    for (int binPos = 0; binPos < 4; binPos++)
+    {
+      digitalWrite(CD4543Pin[pin], number[binPos]);
+      if (debugPrints) {
+        Serial.print("Write Number to Display: ");
+        Serial.print(pin); Serial.print("(PIN) -> ");
+        Serial.print(number[binPos]); Serial.println("(Binary)");
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------
+// transform a single integer into a binary array
+//----------------------------------------------------------------------
+bool *int2bit4rev(uint8_t number)
+{
+	bool *result = new bool[4];
+	if (number == 10) {
+		for (int i = 3; i >= 0; i--) { result[i] = false; } // special format, 10 = blank for displays
+	}
+	else {
+		for (int i = 3; i >= 0; i--) { result[i] = !((number >> i) & 1); }
+	}
+	return result;
+}
