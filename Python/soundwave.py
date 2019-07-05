@@ -55,9 +55,11 @@ class SerialThread(threading.Thread):
         self.freqvol = [
             {"start": 0, "end": 129, "volume": 0.6},
             {"start": 130, "end": 190, "volume": 0.9},
-            {"start": 191, "end": 299, "volume": 0.7},
+            {"start": 191, "end": 220, "volume": 0.5},
+            {"start": 221, "end": 270, "volume": 0.2},
+            {"start": 171, "end": 299, "volume": 0.6},
             {"start": 300, "end": 350, "volume": 0.7},
-            {"start": 351, "end": 500, "volume": 0.85}]
+            {"start": 351, "end": 500, "volume": 1.0}]
 
     # adjust volume for preset frequencies
     def adjust_volume(self, frequency):
