@@ -25,6 +25,7 @@
 # 28.06.2019 - Jan Fischer - Volume adjustment for Frequences (66Hz/160Hz/220Hz/330Hz/440Hz)
 # 04.07.2019 - Jan Fischer - Volume adjustment for 220Hz and 440Hz
 # 09.07.2019 - Jan Fischer - Added Config File (config.json) for Frequence/Volume Settings
+# 26.07.2019 - Jan Fischer - Limit max Frequence to 500 Hz
 
 print("Start Soundwave\n===============")
 
@@ -92,7 +93,7 @@ class SerialThread(threading.Thread):
         start_time = time.time()
         
         s.write("freq_min 10\n")
-        s.write("freq_max 999\n")
+        s.write("freq_max 500\n")
         s.write("freq_set 0\n")
         s.write("freq_step 1\n")
         s.write("vol_min 10\n")
@@ -128,7 +129,7 @@ class SerialThread(threading.Thread):
                 if time.time() - start_time > timeout and not isStandby:
                     s.write("off\n")
                     s.write("freq_min 10\n")
-                    s.write("freq_max 999\n")
+                    s.write("freq_max 500\n")
                     s.write("freq_set 0\n")
                     s.write("freq_step 1\n")
                     s.write("vol_min 10\n")
